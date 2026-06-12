@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Binance Futures Sinyal Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .card { background-color: #1e293b; border: 1px solid #334155; }
+    .accordion-content { transition: max-height 0.3s ease-out, opacity 0.3s ease-out; max-height: 0; opacity: 0; overflow: hidden; }
+    .accordion-content.open { max-height: 500px; opacity: 1; }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-[#0b1120] border-b border-slate-700 p-4 sticky top-0 z-20 shadow-md">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-2 text-sky-400 font-bold text-xl">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+        Sinyal Radarı
+      </div>
+      
+      <div class="flex gap-6 items-center">
+        <div class="flex flex-col items-end">
+          <span class="text-xs text-slate-400 uppercase tracking-wider">Taranan Parite</span>
+          <span class="font-mono text-lg font-bold text-sky-400" id="stat-pairs">0</span>
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-xs text-slate-400 uppercase tracking-wider">Toplam Sinyal</span>
+          <span class="font-mono text-lg font-bold text-emerald-400" id="stat-signals">0</span>
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-xs text-slate-400 uppercase tracking-wider">Durum</span>
+          <div class="flex items-center gap-2 mt-1">
+            <div id="conn-dot" class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+            <span id="conn-text" class="text-sm font-medium">Bağlanıyor...</span>
+          </div>
+        </div>
+        <button id="settings-btn" class="ml-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          Ayarlar
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow max-w-5xl mx-auto w-full p-4 md:p-6">
+    <div id="signals-container" class="space-y-3">
+      <!-- Empty State -->
+      <div id="empty-state" class="text-center py-20 text-slate-500">
+        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        <h2 class="text-xl font-semibold text-slate-300">Henüz Sinyal Yok</h2>
+        <p class="mt-2">Sistem çalışıyor, piyasa izleniyor...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Settings Modal Overlay -->
+  <div id="settings-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="card rounded-xl w-full max-w-md p-6 shadow-2xl relative">
+      <button id="close-settings" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+      <h3 class="text-xl font-bold text-white mb-6">Strateji Ayarları</h3>
+      
+      <form id="settings-form" class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Fiyat Artış Çarpanı (EMA Üzeri)</label>
+          <div class="relative">
+            <input type="number" step="0.001" id="set-price" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+            <span class="absolute right-3 top-2.5 text-slate-400 text-sm">Örn: 1.01 (%1)</span>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Hacim Çarpanı</label>
+          <div class="relative">
+            <input type="number" step="0.1" id="set-volume" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+            <span class="absolute right-3 top-2.5 text-slate-400 text-sm">Örn: 1.0</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Aktif mum hacmi > Önceki mum hacmi * Çarpan</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">İşlem Hızı Çarpanı (60sn Ort.)</label>
+          <div class="relative">
+            <input type="number" step="0.1" id="set-trade" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+            <span class="absolute right-3 top-2.5 text-slate-400 text-sm">Örn: 1.5</span>
+          </div>
+        </div>
+
+        <div class="pt-4 flex gap-3">
+          <button type="submit" class="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2.5 rounded-lg transition-colors">
+            Kaydet & Uygula
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    
+    // UI Elements
+    const container = document.getElementById('signals-container');
+    const emptyState = document.getElementById('empty-state');
+    const connDot = document.getElementById('conn-dot');
+    const connText = document.getElementById('conn-text');
+    const statPairs = document.getElementById('stat-pairs');
+    const statSignals = document.getElementById('stat-signals');
+    
+    // Modal Elements
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsBtn = document.getElementById('settings-btn');
+    const closeSettingsBtn = document.getElementById('close-settings');
+    const settingsForm = document.getElementById('settings-form');
+    
+    // State
+    const activeSignals = new Map(); // Store signal references to update live prices
+
+    // --- WebSocket Events ---
+    
+    socket.on('connect', () => {
+      connDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]';
+      connText.textContent = 'Canlı Veri';
+      connText.className = 'text-sm font-medium text-emerald-400';
+    });
+
+    socket.on('disconnect', () => {
+      connDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]';
+      connText.textContent = 'Koptu';
+      connText.className = 'text-sm font-medium text-red-400';
+    });
+
+    socket.on('stats_update', (stats) => {
+      if (stats.activePairs) statPairs.textContent = stats.activePairs;
+      if (stats.totalSignals !== undefined) statSignals.textContent = stats.totalSignals;
+    });
+
+    socket.on('price_update', (data) => {
+      // Update all expanded rows that match the symbol
+      for (const [id, signalObj] of activeSignals.entries()) {
+        if (signalObj.symbol === data.symbol) {
+          updateLivePrice(id, data.price);
+        }
+      }
+    });
+
+    socket.on('signal', (data) => {
+      if (emptyState.parentNode) emptyState.remove();
+      
+      const id = data.id || `${data.symbol}-${data.timestamp}`;
+      activeSignals.set(id, data);
+      
+      const card = createSignalCard(id, data);
+      container.insertBefore(card, container.firstChild);
+      
+      if (container.children.length > 50) {
+        const lastChild = container.lastChild;
+        const lastId = lastChild.dataset.id;
+        if(lastId) activeSignals.delete(lastId);
+        container.removeChild(lastChild);
+      }
+    });
+
+    // --- DOM Builders ---
+
+    function createSignalCard(id, data) {
+      const card = document.createElement('div');
+      card.className = 'card rounded-xl overflow-hidden cursor-pointer hover:border-slate-500 transition-colors group';
+      card.dataset.id = id;
+      
+      const timeStr = new Date(data.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute:'2-digit', second:'2-digit' });
+      
+      card.innerHTML = `
+        <!-- Main Row (Always Visible) -->
+        <div class="p-4 flex items-center justify-between" onclick="toggleAccordion('${id}')">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-sky-400 border border-slate-700">
+              ${data.symbol.replace('USDT', '')}
+            </div>
+            <div>
+              <h3 class="font-bold text-lg leading-tight group-hover:text-sky-400 transition-colors flex items-center gap-2 flex-wrap">
+                ${data.symbol}
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${data.priceChangePct >= 0 ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/40' : 'bg-rose-900/30 text-rose-400 border border-rose-800/40'} border">
+                  ${data.priceChangePct >= 0 ? '📈 Yükseliş' : '📉 Düşüş'} (${data.priceChangePct >= 0 ? '+' : ''}${data.priceChangePct.toFixed(2)}%)
+                </span>
+              </h3>
+              <span class="text-xs text-slate-400">${timeStr}</span>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-8">
+            <div class="hidden md:flex flex-col items-end">
+              <span class="text-xs text-slate-400">Sinyal Fiyatı</span>
+              <span class="font-mono text-white">${data.price.toFixed(4)}</span>
+            </div>
+            <div class="flex flex-col items-end">
+              <span class="text-xs text-slate-400">CVD Durumu</span>
+              <span class="text-sm font-medium ${data.cvdStatus === 'Alıcılar Güçlü' ? 'text-emerald-400' : 'text-rose-400'} flex items-center gap-1">
+                ${data.cvdStatus === 'Alıcılar Güçlü' ? '↗' : '↘'} ${data.cvdStatus}
+              </span>
+            </div>
+            <svg class="w-5 h-5 text-slate-500 transition-transform duration-300" id="icon-${id}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </div>
+        </div>
+
+        <!-- Expanded Details (Accordion) -->
+        <div id="content-${id}" class="accordion-content bg-slate-900/50 border-t border-slate-700/50">
+          <div class="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <!-- Canlı Fiyat & Performans -->
+            <div class="card p-3 rounded-lg flex flex-col justify-center">
+              <span class="text-xs text-slate-400 mb-1">Canlı Fiyat</span>
+              <div class="flex items-baseline gap-2">
+                <span class="font-mono text-lg font-bold" id="live-price-${id}">${data.price.toFixed(4)}</span>
+                <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-slate-800" id="live-perf-${id}">0.00%</span>
+              </div>
+            </div>
+            
+            <!-- 24s Değişim -->
+            <div class="card p-3 rounded-lg flex flex-col justify-center">
+              <span class="text-xs text-slate-400 mb-1">24s Değişim</span>
+              <span class="font-mono text-lg font-bold" id="ticker24-${id}">Yükleniyor...</span>
+            </div>
+            
+            <!-- Hacim Analizi -->
+            <div class="card p-3 rounded-lg flex flex-col justify-center">
+              <span class="text-xs text-slate-400 mb-1">Hacim Onayı</span>
+              <div class="flex items-end justify-between">
+                <div class="flex flex-col">
+                  <span class="font-mono text-sm">${data.activeVolume.toFixed(0)}</span>
+                  <span class="text-[10px] text-slate-500">Aktif Mum</span>
+                </div>
+                <span class="text-slate-600">></span>
+                <div class="flex flex-col text-right">
+                  <span class="font-mono text-sm">${data.lastVolume.toFixed(0)}</span>
+                  <span class="text-[10px] text-slate-500">Önceki Mum</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- İşlem Hızı -->
+            <div class="card p-3 rounded-lg flex flex-col justify-center">
+              <span class="text-xs text-slate-400 mb-1">60s İşlem İvmesi</span>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-lg font-bold text-sky-400">${(data.tradeRate / Math.max(0.001, data.avgTradeRate)).toFixed(1)}x</span>
+                <span class="text-xs text-slate-500">Ortalama Üzeri</span>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      `;
+      return card;
+    }
+
+    // --- Interactivity ---
+
+    window.toggleAccordion = async function(id) {
+      const content = document.getElementById(`content-${id}`);
+      const icon = document.getElementById(`icon-${id}`);
+      
+      if (content.classList.contains('open')) {
+        content.classList.remove('open');
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        // Close others (optional)
+        document.querySelectorAll('.accordion-content.open').forEach(el => {
+          if (el.id !== `content-${id}`) {
+            el.classList.remove('open');
+            document.getElementById(`icon-${el.id.split('-')[1]}`).style.transform = 'rotate(0deg)';
+          }
+        });
+        
+        content.classList.add('open');
+        icon.style.transform = 'rotate(180deg)';
+        
+        // Fetch 24h ticker if not already fetched
+        const tickerEl = document.getElementById(`ticker24-${id}`);
+        if (tickerEl.textContent === 'Yükleniyor...') {
+          const signalData = activeSignals.get(id);
+          try {
+            const res = await fetch(`/api/ticker24/${signalData.symbol}`);
+            const data = await res.json();
+            const pct = parseFloat(data.priceChangePercent);
+            tickerEl.textContent = `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%`;
+            tickerEl.className = `font-mono text-lg font-bold ${pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+          } catch (err) {
+            tickerEl.textContent = 'Hata';
+            tickerEl.className = 'font-mono text-lg font-bold text-slate-500';
+          }
+        }
+      }
+    };
+
+    function updateLivePrice(id, newPrice) {
+      const signalData = activeSignals.get(id);
+      if (!signalData) return;
+      
+      const priceEl = document.getElementById(`live-price-${id}`);
+      const perfEl = document.getElementById(`live-perf-${id}`);
+      if (!priceEl || !perfEl) return;
+
+      const oldPrice = parseFloat(priceEl.textContent);
+      
+      // Update Price Text
+      priceEl.textContent = newPrice.toFixed(4);
+      
+      // Flash effect based on tick direction
+      priceEl.classList.remove('text-emerald-400', 'text-rose-400');
+      if (newPrice > oldPrice) {
+        priceEl.classList.add('text-emerald-400');
+      } else if (newPrice < oldPrice) {
+        priceEl.classList.add('text-rose-400');
+      }
+
+      // Calculate Performance relative to signal price
+      const diffPct = ((newPrice - signalData.price) / signalData.price) * 100;
+      perfEl.textContent = `${diffPct > 0 ? '+' : ''}${diffPct.toFixed(2)}%`;
+      
+      if (diffPct > 0) {
+        perfEl.className = 'font-mono text-xs px-1.5 py-0.5 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-800';
+      } else if (diffPct < 0) {
+        perfEl.className = 'font-mono text-xs px-1.5 py-0.5 rounded bg-rose-900/30 text-rose-400 border border-rose-800';
+      } else {
+        perfEl.className = 'font-mono text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-300';
+      }
+    }
+
+    // --- Settings Modal ---
+    
+    function fetchSettings() {
+      fetch('/api/settings')
+        .then(res => res.json())
+        .then(settings => {
+          document.getElementById('set-price').value = settings.PRICE_ABOVE_EMA_PCT;
+          document.getElementById('set-volume').value = settings.VOLUME_MULTIPLIER;
+          document.getElementById('set-trade').value = settings.TRADE_RATE_MULTIPLIER;
+        });
+    }
+
+    settingsBtn.addEventListener('click', () => {
+      fetchSettings();
+      settingsModal.classList.remove('hidden');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.add('hidden');
+    });
+
+    settingsForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const newSettings = {
+        PRICE_ABOVE_EMA_PCT: parseFloat(document.getElementById('set-price').value),
+        VOLUME_MULTIPLIER: parseFloat(document.getElementById('set-volume').value),
+        TRADE_RATE_MULTIPLIER: parseFloat(document.getElementById('set-trade').value)
+      };
+
+      const submitBtn = settingsForm.querySelector('button[type="submit"]');
+      const origText = submitBtn.textContent;
+      submitBtn.textContent = 'Kaydediliyor...';
+      submitBtn.disabled = true;
+
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if(data.success) {
+          submitBtn.textContent = 'Kaydedildi ✓';
+          submitBtn.classList.replace('bg-sky-500', 'bg-emerald-500');
+          submitBtn.classList.replace('hover:bg-sky-600', 'hover:bg-emerald-600');
+          
+          setTimeout(() => {
+            settingsModal.classList.add('hidden');
+            submitBtn.textContent = origText;
+            submitBtn.classList.replace('bg-emerald-500', 'bg-sky-500');
+            submitBtn.classList.replace('hover:bg-emerald-600', 'hover:bg-sky-600');
+            submitBtn.disabled = false;
+          }, 1000);
+        }
+      })
+      .catch(err => {
+        console.error('Ayarlar güncellenirken hata:', err);
+        submitBtn.textContent = 'Hata Oluştu';
+        submitBtn.disabled = false;
+      });
+    });
+
+    // Initial Fetch
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(stats => {
+        if (stats.activePairs) statPairs.textContent = stats.activePairs;
+        if (stats.totalSignals !== undefined) statSignals.textContent = stats.totalSignals;
+      });
+
+  </script>
+</body>
+</html>
