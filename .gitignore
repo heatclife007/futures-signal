@@ -1,0 +1,14 @@
+node_modules/
+.env
+scratch-*.js
+scratch/
+C:\Users\fatih\.gemini/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.idea/
+.vscode/
+test-logic.js
+check-market.js
+scratch-test-filters.js
