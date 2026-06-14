@@ -100,6 +100,24 @@
           </div>
         </div>
 
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Minimum Artış Süresi (Saniye)</label>
+          <div class="relative">
+            <input type="number" step="1" min="0" id="set-min-duration" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+            <span class="absolute right-3 top-2.5 text-slate-400 text-sm">Örn: 2</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Bu süreden daha kısa sürede %1 artış olursa sinyal geçersiz sayılır.</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Minimum 24s Hacim ($)</label>
+          <div class="relative">
+            <input type="number" step="100000" min="0" id="set-min-volume-24h" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+            <span class="absolute right-3 top-2.5 text-slate-400 text-sm">Örn: 1000000 ($1M)</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">24 saatlik hacmi bu değerin altında olan coinler elenir.</p>
+        </div>
+
         <div class="pt-4 flex gap-3">
           <button type="submit" class="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2.5 rounded-lg transition-colors">
             Kaydet & Uygula
@@ -229,10 +247,15 @@
               </div>
             </div>
             
-            <!-- 24s Değişim -->
+            <!-- 24s Değişim & Hacim -->
             <div class="card p-3 rounded-lg flex flex-col justify-center">
-              <span class="text-xs text-slate-400 mb-1">24s Değişim</span>
-              <span class="font-mono text-lg font-bold" id="ticker24-${id}">Yükleniyor...</span>
+              <span class="text-xs text-slate-400 mb-1">24s Değişim / Hacim</span>
+              <div class="flex flex-col">
+                <span class="font-mono text-base font-bold" id="ticker24-${id}">Yükleniyor...</span>
+                <span class="font-mono text-xs text-slate-400 mt-0.5">
+                  ${data.volume24h ? '$' + (data.volume24h / 1e6).toFixed(2) + 'M Hacim' : 'Hacim Bilinmiyor'}
+                </span>
+              </div>
             </div>
             
             <!-- Hacim Analizi -->
@@ -292,8 +315,18 @@
         if (tickerEl.textContent === 'Yükleniyor...') {
           const signalData = activeSignals.get(id);
           try {
-            const res = await fetch(`/api/ticker24/${signalData.symbol}`);
-            const data = await res.json();
+            let data;
+            try {
+              // Try direct browser request to Binance first (faster, bypasses server IP blocks)
+              const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${signalData.symbol}`);
+              if (!res.ok) throw new Error('Direct fetch failed');
+              data = await res.json();
+            } catch (directErr) {
+              // Fallback to server backend if direct browser fetch fails
+              const res = await fetch(`/api/ticker24/${signalData.symbol}`);
+              data = await res.json();
+            }
+
             const pct = parseFloat(data.priceChangePercent);
             tickerEl.textContent = `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%`;
             tickerEl.className = `font-mono text-lg font-bold ${pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
@@ -348,6 +381,8 @@
           document.getElementById('set-price').value = settings.PRICE_ABOVE_EMA_PCT;
           document.getElementById('set-volume').value = settings.VOLUME_MULTIPLIER;
           document.getElementById('set-trade').value = settings.TRADE_RATE_MULTIPLIER;
+          document.getElementById('set-min-duration').value = settings.MIN_DURATION_SECONDS !== undefined ? settings.MIN_DURATION_SECONDS : 2;
+          document.getElementById('set-min-volume-24h').value = settings.MIN_24H_VOLUME !== undefined ? settings.MIN_24H_VOLUME : 1000000;
         });
     }
 
@@ -366,7 +401,9 @@
       const newSettings = {
         PRICE_ABOVE_EMA_PCT: parseFloat(document.getElementById('set-price').value),
         VOLUME_MULTIPLIER: parseFloat(document.getElementById('set-volume').value),
-        TRADE_RATE_MULTIPLIER: parseFloat(document.getElementById('set-trade').value)
+        TRADE_RATE_MULTIPLIER: parseFloat(document.getElementById('set-trade').value),
+        MIN_DURATION_SECONDS: parseFloat(document.getElementById('set-min-duration').value),
+        MIN_24H_VOLUME: parseFloat(document.getElementById('set-min-volume-24h').value)
       };
 
       const submitBtn = settingsForm.querySelector('button[type="submit"]');
