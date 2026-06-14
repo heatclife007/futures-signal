@@ -1,16 +1,40 @@
-const { activeKlinesMap } = require('./marketData');
+const { activeKlinesMap, volume24hMap } = require('./marketData');
 const { calculateEMA, updateAndCheckTradeRate } = require('./strategy');
 const { sendSignal } = require('./telegram');
 const { broadcastSignal, emitLivePrice } = require('./webServer');
 const config = require('./config');
 
 const cooldownMap = new Map();
+const symbolPriceHistory = new Map(); // symbol -> Array of { price, timestamp }
 // Keep track of recently signaled symbols to emit live price updates
 const signaledSymbols = new Set();
 const signaledSymbolsList = []; // to manage size limit
 
 function processWebsocketMessage(data) {
-  if (!data || !data.data || data.data.e !== 'kline') return;
+  if (!data) return;
+
+  // Handle miniTicker array
+  let tickerArray = null;
+  if (Array.isArray(data.data)) {
+    tickerArray = data.data;
+  } else if (Array.isArray(data)) {
+    tickerArray = data;
+  }
+
+  if (tickerArray) {
+    for (const item of tickerArray) {
+      if (item.e === '24hrMiniTicker') {
+        const symbol = item.s;
+        const volume = parseFloat(item.q);
+        if (!isNaN(volume)) {
+          volume24hMap.set(symbol, volume);
+        }
+      }
+    }
+    return;
+  }
+
+  if (!data.data || data.data.e !== 'kline') return;
 
   const klineData = data.data.k;
   const symbol = data.data.s;
@@ -20,6 +44,20 @@ function processWebsocketMessage(data) {
   const takerBuyVolume = parseFloat(klineData.V); // Taker buy base asset volume
   const currentTrades = klineData.n;
   const timestamp = Date.now();
+
+  // Track sliding price history for time-based filtering
+  if (!symbolPriceHistory.has(symbol)) {
+    symbolPriceHistory.set(symbol, []);
+  }
+  const priceHistory = symbolPriceHistory.get(symbol);
+  priceHistory.push({ price: currentPrice, timestamp });
+
+  // Keep history up to max of MIN_DURATION_SECONDS and 10 seconds to cover changes
+  const maxKeepWindowMs = Math.max(config.settings.MIN_DURATION_SECONDS * 1000, 10000);
+  const cutoff = timestamp - maxKeepWindowMs;
+  while (priceHistory.length > 0 && priceHistory[0].timestamp < cutoff) {
+    priceHistory.shift();
+  }
 
   // 1. Emit live price if this symbol is currently in our tracking list
   if (signaledSymbols.has(symbol)) {
@@ -74,6 +112,32 @@ function processWebsocketMessage(data) {
     (currentRate > (avgRate * config.settings.TRADE_RATE_MULTIPLIER) && currentRate > 0);
 
   if (priceCondition && volumeCondition && tradeRateCondition) {
+    // 24h Volume Filter
+    const volume24h = volume24hMap.get(symbol) || 0;
+    if (config.settings.MIN_24H_VOLUME > 0 && volume24h <= config.settings.MIN_24H_VOLUME) {
+      console.log(`[FILTER] ${symbol} filtered out: 24h Volume ($${(volume24h / 1e6).toFixed(2)}M) <= limit ($${(config.settings.MIN_24H_VOLUME / 1e6).toFixed(2)}M)`);
+      return;
+    }
+
+    // Time-based rapid rise filter
+    if (config.settings.MIN_DURATION_SECONDS > 0) {
+      const windowStart = timestamp - (config.settings.MIN_DURATION_SECONDS * 1000);
+      const history = symbolPriceHistory.get(symbol) || [];
+      let rapidRise = false;
+      for (const entry of history) {
+        if (entry.timestamp >= windowStart && entry.timestamp < timestamp) {
+          if (currentPrice >= entry.price * 1.01) {
+            rapidRise = true;
+            break;
+          }
+        }
+      }
+      if (rapidRise) {
+        console.log(`[FILTER] ${symbol} filtered out: Rose >= 1% in less than ${config.settings.MIN_DURATION_SECONDS}s`);
+        return;
+      }
+    }
+
     cooldownMap.set(symbol, true); 
 
     // CVD Calculation
@@ -101,7 +165,8 @@ function processWebsocketMessage(data) {
       cvdStatus,
       priceChangePct,
       direction,
-      timestamp
+      timestamp,
+      volume24h
     };
 
     // Add to tracking list for live price updates

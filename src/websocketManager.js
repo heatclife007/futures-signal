@@ -48,6 +48,8 @@ function connectWebSocket(streamsBatch, batchIndex) {
 function startWebsocketConnections(symbols) {
   // We need streams in the format: <symbol>@kline_5m
   const streams = symbols.map(s => `${s.toLowerCase()}@kline_5m`);
+  // Add global mini-ticker stream to track 24h volumes of all coins in real-time
+  streams.push('!miniTicker@arr');
   
   // Split into chunks of 200
   for (let i = 0; i < streams.length; i += MAX_STREAMS_PER_CONN) {

@@ -24,12 +24,15 @@ async function sendSignal(signalData) {
     second: '2-digit' 
   });
 
+  const vol24h = signalData.volume24h ? `$${(signalData.volume24h / 1e6).toFixed(2)}M` : 'Bilinmiyor';
+
   const message = `🚀 <b>#${signalData.symbol.replace('USDT', '')}</b> | <b>${signalData.price} USDT</b>
 
 🧭 <b>Yön:</b> ${directionIcon} ${directionText} (${signalData.priceChangePct >= 0 ? '+' : ''}${signalData.priceChangePct.toFixed(2)}%)
 ⚖️ <b>CVD:</b> ${cvdIcon} ${signalData.cvdStatus}
 ⚡ <b>Hız:</b> ${(signalData.tradeRate / Math.max(0.001, signalData.avgTradeRate)).toFixed(1)}x
 📊 <b>Hacim (Aktif/Son):</b> ${signalData.activeVolume.toFixed(0)} / ${signalData.lastVolume.toFixed(0)}
+💰 <b>24s Hacim:</b> ${vol24h}
 🕐 <b>Zaman:</b> ${timeStr}`;
 
   try {

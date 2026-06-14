@@ -2,6 +2,7 @@ const axios = require('axios');
 const config = require('./config');
 
 const activeKlinesMap = new Map(); // symbol -> Array of last 10 closed klines (objects)
+const volume24hMap = new Map();    // symbol -> 24h volume in USD (quoteVolume)
 
 // Helper to split array into chunks
 function chunkArray(array, size) {
@@ -81,5 +82,6 @@ async function initializeMarketData() {
 
 module.exports = {
   initializeMarketData,
-  activeKlinesMap
+  activeKlinesMap,
+  volume24hMap
 };
